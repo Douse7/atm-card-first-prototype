@@ -1,0 +1,982 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}body{margin:0}</style>
+<title>급할수록 놓치는 카드</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="편의점 무인 ATM의 카드·현금 반환 순서를 기존 방식(A)과 개선안(B)으로 비교해 보는 사용자 테스트용 웹 프로토타입">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: 연구자 패널 | ATM 기기(실물 비율) | 시간순 관찰 기록 — Ch05 관찰기록 양식을 화면 오른쪽에 그대로 옮김 */
+:root{
+  --bg:#eceeea; --surface:#fbfbf9; --ink:#1c2220; --muted:#5a6460; --line:#d3d8d2;
+  --machine:#2b3135; --machine-2:#3a4247; --machine-ink:#e8ecea; --bezel:#151a1d;
+  --screen:#0e3a58; --screen-2:#164b70; --screen-ink:#f1f6fa; --screen-dim:#9fbad0;
+  --card:#f0a417; --card-ink:#2a1b00; --cash:#2e9b69; --cash-ink:#04220f;
+  --warn:#d43d2c; --warn-soft:#f7dcd7; --ok:#2e8b5b; --accent:#1d6a98; --accent-ink:#ffffff;
+  --mark:#fff3cf;
+  --f-body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-num:"Space Grotesk","IBM Plex Sans KR",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  --r:10px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121615; --surface:#1b201e; --ink:#e4e9e6; --muted:#9aa4a0; --line:#2e3532;
+    --machine:#363d42; --machine-2:#454e54; --machine-ink:#e8ecea; --bezel:#0b0e10;
+    --warn-soft:#3b1c18; --ok:#4cbf86; --accent:#5aaedd; --accent-ink:#06202f; --mark:#3a3216;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121615; --surface:#1b201e; --ink:#e4e9e6; --muted:#9aa4a0; --line:#2e3532;
+  --machine:#363d42; --machine-2:#454e54; --machine-ink:#e8ecea; --bezel:#0b0e10;
+  --warn-soft:#3b1c18; --ok:#4cbf86; --accent:#5aaedd; --accent-ink:#06202f; --mark:#3a3216;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.6}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3{text-wrap:balance;line-height:1.3;margin:0}
+.wrap{max-width:1320px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* header */
+.top{border-bottom:1px solid var(--line);background:var(--surface)}
+.top .wrap{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding-block:14px}
+.brand small{display:block;font-size:12px;letter-spacing:.06em;color:var(--muted)}
+.brand h1{font-size:21px;font-weight:700}
+.nav{display:flex;gap:4px;background:var(--bg);padding:4px;border-radius:999px;border:1px solid var(--line)}
+.nav a{padding:6px 16px;border-radius:999px;text-decoration:none;color:var(--muted);font-weight:500;font-size:14px}
+.nav a[aria-current="page"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px #0000001f}
+main .wrap{padding-block:22px 48px}
+
+/* lab layout */
+.lab{display:grid;grid-template-columns:minmax(220px,260px) minmax(0,1fr) minmax(250px,310px);gap:20px;align-items:start}
+@media (max-width:1060px){.lab{grid-template-columns:1fr}.atm-col{order:-1}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel h2{font-size:15px}
+.label{font-size:12px;letter-spacing:.06em;color:var(--muted);font-weight:500}
+.field{display:flex;flex-direction:column;gap:4px}
+.field input[type=text],.field select{padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:14px}
+.check input{margin-top:5px}
+.check span small{display:block;color:var(--muted);font-size:12px}
+.cond-desc{font-size:13px;color:var(--muted);background:var(--bg);border-radius:8px;padding:10px;line-height:1.55}
+.cond-desc b{color:var(--ink)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:9px 14px;font-weight:500}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--warn);border-color:var(--warn)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:8px}
+.trial-info{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+
+/* ATM */
+.atm-col{display:flex;flex-direction:column;align-items:center;gap:14px;min-width:0}
+.atm{position:relative;width:100%;max-width:540px;background:linear-gradient(180deg,var(--machine-2),var(--machine));border-radius:18px 18px 8px 8px;padding:14px;color:var(--machine-ink);box-shadow:0 18px 30px -18px #000000a0}
+.atm-plate{display:flex;justify-content:space-between;align-items:center;font-size:11px;letter-spacing:.12em;padding:0 4px 10px;color:var(--machine-ink);opacity:.8}
+.atm-plate b{font-family:var(--f-num);letter-spacing:.04em;font-size:12px}
+.pressure{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#00000040;border-radius:8px;padding:6px 10px;margin-bottom:10px;font-size:13px}
+.pressure .p-time{font-family:var(--f-num);font-variant-numeric:tabular-nums;font-weight:700}
+.pressure.hot{background:color-mix(in srgb,var(--warn) 55%,transparent)}
+.bezel{background:var(--bezel);border-radius:10px;padding:10px}
+.screen{position:relative;background:radial-gradient(120% 90% at 30% 0%,var(--screen-2),var(--screen));color:var(--screen-ink);border-radius:6px;aspect-ratio:4/3;min-height:290px;overflow:hidden;max-width:100%}
+.scr{display:flex;flex-direction:column;gap:10px;height:100%;padding:18px 20px}
+.scr.center{justify-content:center;align-items:center;text-align:center}
+.scr h2{font-size:22px;font-weight:700}
+.scr .eyebrow{font-size:12px;letter-spacing:.14em;color:var(--screen-dim);margin:0}
+.scr .sub{color:var(--screen-dim);margin:0;font-size:14px}
+.scr .fine{font-size:11px;color:var(--screen-dim);margin:0;line-height:1.45}
+.scr .spacer{flex:1}
+.sbtn{background:#ffffff1f;border:1px solid #ffffff40;color:var(--screen-ink);border-radius:6px;padding:10px 12px;font-weight:500;text-align:center}
+.sbtn:hover{background:#ffffff33}
+.sbtn.go{background:var(--card);color:var(--card-ink);border-color:var(--card);font-weight:700}
+.sbtn.small{padding:4px 8px;font-size:12px}
+.cond-A .scr h2{font-size:18px;font-weight:500}
+.pinbox{display:flex;gap:12px;margin:8px 0}
+.pinbox i{width:22px;height:22px;border-radius:50%;border:2px solid var(--screen-dim)}
+.pinbox i.on{background:var(--screen-ink);border-color:var(--screen-ink)}
+.menuA{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.menuA .sbtn{padding:8px 4px;font-size:13px}
+.menuB-top{display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--card);color:var(--card-ink);border:none;border-radius:8px;padding:14px 16px;text-align:left}
+.menuB-top b{font-size:22px;display:block}
+.menuB-top small{font-size:12px}
+.menuB-top svg{width:44px;height:30px;color:#ffffffaa;flex:none}
+.menuB{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
+.menuB .sbtn{text-align:left;padding:7px 10px;font-size:13px;line-height:1.3}
+.menuB .sbtn small{display:block;color:var(--screen-dim);font-size:11px}
+.menuB3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.menuB3 .sbtn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;padding:12px 10px;min-width:0}
+.menuB3 b{font-size:17px}
+.menuB3 small{color:var(--screen-dim);font-size:11px;line-height:1.3}
+.sbtn.others{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;min-width:0}
+.sbtn.others .en{font-family:var(--f-num);font-size:11px;letter-spacing:.12em;color:var(--screen-dim)}
+.sbtn.others small{color:var(--screen-dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.amts{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.amts .sbtn.sel{background:var(--screen-ink);color:var(--screen);border-color:var(--screen-ink)}
+.amt-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.amt-val{font-family:var(--f-num);font-size:26px;font-weight:700;font-variant-numeric:tabular-nums}
+.order-banner{display:flex;align-items:center;justify-content:center;gap:12px;background:#ffffff14;border-radius:10px;padding:12px}
+.ob-step{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:15px}
+.ob-step svg{width:58px;height:40px}
+.ob-step.card{color:var(--card)}
+.ob-step.cash{color:var(--cash)}
+.ob-step b{color:var(--screen-ink)}
+.ob-arrow{width:28px;height:28px;color:var(--screen-dim)}
+.ob-step.done{opacity:.45}
+.ob-step .st{font-size:12px;color:var(--screen-dim)}
+mark.m-card{background:var(--card);color:var(--card-ink);padding:0 6px;border-radius:4px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:#ffffff1a;border-radius:999px;padding:3px 10px;align-self:flex-start}
+.chip .c{color:var(--card);font-weight:700}.chip .m{color:var(--cash);font-weight:700}
+.progress{height:6px;background:#ffffff26;border-radius:3px;overflow:hidden;width:70%}
+.progress i{display:block;height:100%;width:0;background:var(--screen-ink);animation:fill 1.8s linear forwards}
+@keyframes fill{to{width:100%}}
+.scr-toast{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);background:#000000c0;color:#fff;padding:8px 14px;border-radius:6px;font-size:13px;white-space:nowrap;max-width:92%;overflow:hidden;text-overflow:ellipsis}
+
+.lower{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+@media (max-width:480px){.lower{grid-template-columns:1fr}}
+.keypad{display:grid;grid-template-columns:repeat(3,1fr) 1.25fr;grid-template-rows:repeat(4,38px);gap:6px;background:var(--bezel);padding:8px;border-radius:8px}
+.key{background:linear-gradient(180deg,#d9dee0,#b9c0c4);color:#1a1f22;border:none;border-radius:5px;font-family:var(--f-num);font-weight:700;font-size:16px;box-shadow:0 2px 0 #00000080}
+.key:active{transform:translateY(1px);box-shadow:none}
+.key.fn{font-family:var(--f-body);font-size:13px;color:#fff}
+.key.cancel{background:#c8372a}.key.fix{background:#d8a21a;color:#2a1b00}.key.ok{background:#2c8a58;grid-row:span 2}
+.key.blank{visibility:hidden}
+.slots{display:flex;flex-direction:column;gap:10px}
+.slot{position:relative;background:var(--bezel);border-radius:8px;padding:8px 10px 10px;min-height:76px;display:flex;flex-direction:column;gap:6px}
+.slot .slot-label{display:flex;justify-content:space-between;font-size:11px;letter-spacing:.1em;opacity:.8}
+.slot .mouth{height:8px;border-radius:4px;background:#000;box-shadow:inset 0 2px 3px #000}
+.slot .item{display:flex;align-items:center;gap:10px;border:none;border-radius:6px;padding:8px 10px;font-weight:700;font-size:14px;text-align:left;animation:pop .35s ease-out}
+.slot .item svg{width:36px;height:24px;flex:none}
+.item.card{background:var(--card);color:var(--card-ink)}
+.item.cash{background:var(--cash);color:var(--cash-ink)}
+.slot .lock{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--card)}
+.slot .lock svg{width:18px;height:18px}
+.slot .idle{font-size:12px;opacity:.55}
+.slot.glow .mouth{box-shadow:0 0 0 2px var(--card),0 0 14px var(--card)}
+.slot.alarm{animation:alarm .9s ease-in-out 3}
+@keyframes alarm{0%,100%{box-shadow:none}50%{box-shadow:0 0 0 3px var(--warn),0 0 22px var(--warn)}}
+@keyframes pop{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+
+.hand{width:100%;max-width:540px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px}
+.hand .items{display:flex;flex-wrap:wrap;gap:8px;align-items:center;min-width:0}
+.hand .tag{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:5px 10px;border-radius:999px;border:1px solid var(--line)}
+.hand .tag svg{width:24px;height:16px}
+.hand .tag.card svg{color:var(--card)}.hand .tag.cash svg{color:var(--cash)}
+.insert-btn{display:inline-flex;align-items:center;gap:10px;background:var(--card);color:var(--card-ink);border:none;border-radius:8px;padding:10px 14px;font-weight:700}
+.insert-btn svg{width:34px;height:22px}
+.leave-btn{display:inline-flex;align-items:center;gap:8px;background:var(--ink);color:var(--bg);border:none;border-radius:8px;padding:10px 16px;font-weight:700}
+.leave-btn svg{width:18px;height:18px}
+.leave-btn:disabled{opacity:.3;cursor:not-allowed}
+
+.overlay{position:absolute;inset:0;border-radius:inherit;background:color-mix(in srgb,var(--warn) 88%,#000);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:24px;animation:flash .5s ease-in-out 4 alternate}
+@keyframes flash{from{filter:brightness(1)}to{filter:brightness(1.25)}}
+.overlay .beep{font-family:var(--f-num);font-size:30px;font-weight:700;letter-spacing:.06em}
+.overlay p{margin:0;font-size:16px}
+.overlay .bar{width:60%;height:6px;border-radius:3px;background:#ffffff40;overflow:hidden}
+.overlay .bar i{display:block;height:100%;background:#fff;animation:drain 4s linear forwards}
+@keyframes drain{from{width:100%}to{width:0}}
+.overlay button{background:#fff;color:var(--warn);border:none;border-radius:8px;padding:12px 20px;font-weight:700;font-size:16px}
+
+/* log */
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;max-height:520px;overflow:auto;font-size:13px}
+.log li{display:grid;grid-template-columns:52px 1fr;gap:8px;padding:5px 6px;border-radius:6px}
+.log time{font-family:var(--f-mono);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
+.log li.user{background:var(--bg)}
+.log li.err{background:var(--warn-soft)}
+.log li.warn{background:var(--warn-soft);font-weight:500}
+.log li.ok{color:var(--ok);font-weight:500}
+.empty{color:var(--muted);font-size:13px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:11px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+
+/* survey */
+.survey{width:100%;max-width:640px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:22px;display:flex;flex-direction:column;gap:18px}
+.outcome{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.outcome div{background:var(--bg);border-radius:8px;padding:10px 12px}
+.outcome dt{font-size:12px;color:var(--muted)}
+.outcome dd{margin:0;font-weight:700;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.outcome dd.bad{color:var(--warn)}.outcome dd.good{color:var(--ok)}
+.likert fieldset{border:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
+.likert legend{font-weight:500;margin-bottom:6px;padding:0}
+.scale{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.scale label{display:flex}
+.scale input{position:absolute;opacity:0;pointer-events:none}
+.scale span{display:grid;place-items:center;width:44px;height:40px;border:1px solid var(--line);border-radius:8px;font-family:var(--f-num);font-weight:700;background:var(--bg)}
+.scale input:checked+span{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.scale input:focus-visible+span{outline:3px solid var(--accent);outline-offset:2px}
+.scale .end{font-size:12px;color:var(--muted)}
+textarea{width:100%;min-height:80px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);resize:vertical}
+
+/* results */
+.res-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:16px}
+.res-head h2{font-size:22px}
+.res-head p{margin:4px 0 0;color:var(--muted);font-size:14px;max-width:62ch}
+.notice{border:1px dashed var(--card);background:var(--mark);border-radius:var(--r);padding:12px 14px;font-size:14px;margin-bottom:16px}
+.res-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:900px){.res-grid{grid-template-columns:1fr}}
+.metric{display:grid;grid-template-columns:minmax(0,1fr);gap:6px;padding:12px 0;border-bottom:1px solid var(--line)}
+.metric:last-child{border-bottom:none}
+.metric .mh{display:flex;justify-content:space-between;gap:8px;font-size:14px;font-weight:500}
+.metric .mh small{color:var(--muted);font-weight:400;font-size:12px}
+.bar-row{display:grid;grid-template-columns:22px minmax(0,1fr) 64px;gap:8px;align-items:center;font-size:13px}
+.bar-row b{font-family:var(--f-num)}
+.bar-track{height:12px;background:var(--bg);border-radius:6px;overflow:hidden}
+.bar-track i{display:block;height:100%;border-radius:6px}
+.bar-row.A i{background:var(--muted)}
+.bar-row.B i{background:var(--accent)}
+.bar-row .v{text-align:right;font-family:var(--f-num);font-variant-numeric:tabular-nums}
+.ncount{display:flex;gap:16px;font-size:13px;color:var(--muted);margin-bottom:4px}
+.tbl-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--r);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+td.wrap-cell{white-space:normal;min-width:180px}
+th{font-size:12px;color:var(--muted);font-weight:500;background:var(--bg)}
+td.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;text-align:right}
+.pill{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;font-weight:500}
+.pill.A{background:var(--bg);border:1px solid var(--line)}
+.pill.B{background:var(--accent);color:var(--accent-ink)}
+.pill.bad{background:var(--warn-soft);color:var(--warn)}
+.pill.near{background:var(--mark)}
+.pill.good{color:var(--ok)}
+.confirm-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
+.copy-area{width:100%;min-height:120px;font-family:var(--f-mono);font-size:12px}
+
+/* plan */
+.plan{display:grid;grid-template-columns:minmax(0,1fr);gap:28px;max-width:960px}
+.plan section{display:flex;flex-direction:column;gap:10px}
+.plan h2{font-size:20px}
+.plan p{margin:0;max-width:68ch}
+.statement{font-size:17px;line-height:1.7;border-left:4px solid var(--card);padding:4px 0 4px 16px;max-width:68ch}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.cols .panel h3{font-size:15px}
+.cols .panel p,.cols .panel ul{font-size:14px;margin:0}
+.cols .panel ul{padding-left:18px}
+.refs{font-size:13px;color:var(--muted);padding-left:18px;margin:0}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:8px;font-size:14px;z-index:20}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <small>HCI 프로젝트 · 편의점 무인 ATM 반환 순서 개선</small>
+      <h1>급할수록 놓치는 카드</h1>
+    </div>
+    <nav class="nav" aria-label="화면 전환">
+      <a href="#lab" data-nav="lab">테스트</a>
+      <a href="#results" data-nav="results">결과</a>
+      <a href="#plan" data-nav="plan">기획 요약</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+<!-- 테스트 -->
+<section id="v-lab" class="lab">
+  <aside class="panel" aria-label="연구자 패널">
+    <h2>연구자 패널</h2>
+    <div class="field">
+      <label class="label" for="pid">참여자 ID (가명)</label>
+      <input type="text" id="pid" maxlength="12" autocomplete="off">
+    </div>
+    <div class="field">
+      <label class="label" for="cond">비교 조건</label>
+      <select id="cond">
+        <option value="A">A · 기존 방식</option>
+        <option value="B">B · 개선안 (카드 우선 반환)</option>
+        <option value="R">무작위 배정</option>
+      </select>
+    </div>
+    <div class="cond-desc" id="condDesc"></div>
+    <label class="check"><input type="checkbox" id="pressureOpt"><span>시간 압박 재현<small>뒤에 대기자가 있다는 표시와 경과 시간을 보여 줍니다 (Ch04 실험실 효과 보완)</small></span></label>
+    <label class="check"><input type="checkbox" id="beepA"><span>A 조건에도 카드 미회수 경고음<small>Ch05 관찰 기기에는 경고음이 있었음 (4초는 가정값)</small></span></label>
+    <div class="row">
+      <button class="btn primary" id="startBtn">새 테스트 시작</button>
+    </div>
+    <p class="trial-info" id="trialInfo"></p>
+  </aside>
+
+  <div class="atm-col">
+    <div id="atmWrap" class="atm-col" style="width:100%">
+      <div class="atm" id="atm">
+        <div class="atm-plate"><span>CONVENIENCE ATM</span><b>24H · 타행 제휴</b></div>
+        <div class="pressure" id="pressure" hidden><span class="p-msg"></span><span class="p-time">00:00</span></div>
+        <div class="bezel"><div class="screen" id="screen" aria-live="polite"></div></div>
+        <div class="lower">
+          <div class="keypad" id="keypad" aria-label="비밀번호 키패드"></div>
+          <div class="slots">
+            <div class="slot" id="cardSlot"></div>
+            <div class="slot" id="cashSlot"></div>
+          </div>
+        </div>
+        <div class="overlay" id="overlay" hidden role="alertdialog" aria-labelledby="ovMsg"></div>
+      </div>
+      <div class="hand" id="hand"></div>
+    </div>
+    <div class="survey" id="survey" hidden></div>
+  </div>
+
+  <aside class="panel" aria-label="시간순 관찰 기록">
+    <h2>시간순 관찰 기록</h2>
+    <div class="legend"><span><i style="background:var(--bg);border:1px solid var(--line)"></i>사용자 행동</span><span><i style="background:var(--warn-soft)"></i>오류·경고</span><span><i style="background:var(--ok)"></i>완료</span></div>
+    <ol class="log" id="log"></ol>
+  </aside>
+</section>
+
+<!-- 결과 -->
+<section id="v-results" hidden>
+  <div class="res-head">
+    <div>
+      <h2>A·B 조건 비교</h2>
+      <p>Ch03에서 정한 지표(카드 회수 성공률, 반환 순서 예측 가능성)와 Ch04 연구질문에 필요한 시간·오류 기록을 조건별로 모았습니다. 3~5명 규모라 통계 검정이 아니라 방향 확인용입니다.</p>
+    </div>
+    <div class="row">
+      <button class="btn" id="copyCsv">CSV 복사</button>
+      <button class="btn danger" id="clearBtn">기록 전체 삭제</button>
+    </div>
+  </div>
+  <div id="confirmClear" class="notice" hidden>
+    <div class="confirm-row">이 브라우저에 저장된 테스트 기록을 모두 지웁니다. 되돌릴 수 없습니다.
+      <button class="btn danger" id="clearYes">삭제</button><button class="btn" id="clearNo">취소</button></div>
+  </div>
+  <div id="sampleNote" class="notice" hidden><b>가상 예시 데이터입니다.</b> 아직 저장된 테스트가 없어 화면 구성을 보여 주기 위한 예시를 표시합니다. 실측값이 아니며, 첫 테스트를 저장하면 사라집니다.</div>
+  <textarea id="csvFallback" class="copy-area" hidden readonly aria-label="CSV 데이터"></textarea>
+  <div class="res-grid">
+    <div class="panel"><h2>지표 비교</h2><div class="ncount" id="ncount"></div><div id="metrics"></div></div>
+    <div class="panel"><h2>가설 판정 메모</h2><div id="verdict" style="font-size:14px;display:flex;flex-direction:column;gap:8px"></div></div>
+  </div>
+  <h2 style="font-size:17px;margin:24px 0 10px">시행별 기록</h2>
+  <div class="tbl-wrap"><table><thead><tr><th>#</th><th>참여자</th><th>조건</th><th>반환 순서</th><th>카드</th><th>총 시간</th><th>메뉴 탐색</th><th>안내 확인</th><th>경고음</th><th>예측</th><th>불안</th><th>의견</th></tr></thead><tbody id="tbody"></tbody></table></div>
+  <p class="empty" style="margin-top:10px">기록은 이 브라우저에만 저장됩니다. 제출하거나 옮길 때는 <b>CSV 복사</b>로 스프레드시트에 붙여 넣으세요.</p>
+</section>
+
+<!-- 기획 요약 -->
+<section id="v-plan" class="plan" hidden>
+  <section>
+    <p class="label">핵심 문제 (Chapter 02 최종 문제문장)</p>
+    <p class="statement">급하게 편의점 무인 ATM에서 출금하려는 이용자는 현금과 카드를 모두 챙겨 자리를 뜨려 하지만, 시스템이 반환 순서를 사전 안내함에도 기기마다 그 순서 자체가 달라 급한 상황에서는 안내를 놓치기 쉬워, 현금을 먼저 받으면 목표가 달성됐다고 느껴 카드 회수라는 남은 절차를 잊어버릴 위험을 경험한다.</p>
+  </section>
+
+  <section>
+    <h2>근거</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>ID</th><th>내용</th><th>출처</th></tr></thead>
+      <tbody>
+        <tr><td>E01</td><td class="wrap-cell">두 번의 이용에서 반환 순서가 달랐음(현금 먼저 / 카드 먼저). 사전 안내는 있었지만 급해서 주의를 기울이지 못함</td><td>Ch01·02 본인 경험</td></tr>
+        <tr><td>E02</td><td class="wrap-cell">여러 메뉴 중 출금 메뉴를 찾는 데 시간이 걸림</td><td>Ch01·02 본인 경험</td></tr>
+        <tr><td>E03</td><td class="wrap-cell">목표(현금)가 먼저 충족되면 남은 절차(카드 회수)를 잊는 post-completion error</td><td>Byrne &amp; Bovair (1997)</td></tr>
+        <tr><td>C01</td><td class="wrap-cell">P1이 반환 순서 안내를 1초만 보고 넘어감 — "빨리 하려고 밑에 버튼 쪽만 봤다"</td><td>Ch05 맥락질의</td></tr>
+        <tr><td>C02</td><td class="wrap-cell">현금을 먼저 받고 카드를 둔 채 두 걸음 떠났다가 경고음에 돌아옴</td><td>Ch05 맥락질의</td></tr>
+        <tr><td>C03</td><td class="wrap-cell">금액 화면에서 "입력완료" 버튼을 찾느라 약 2초 헤맴 (숙련도에 따라 다름)</td><td>Ch05 맥락질의</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>기획 → 구현 대응</h2>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>요구사항</th><th>근거</th><th>프로토타입에서 구현한 것</th></tr></thead>
+      <tbody>
+        <tr><td class="wrap-cell"><b>R1</b> 반환 순서를 카드 우선으로 통일하고 구조적으로 강제 (Frame 3)</td><td>E01·E03·C02·I02</td><td class="wrap-cell">조건 B: 카드가 먼저 나오고, 카드를 가져가기 전까지 현금 출구가 잠겨 있음</td></tr>
+        <tr><td class="wrap-cell"><b>R2</b> 글을 읽지 않아도 알아채는 순서 안내 (Frame 1)</td><td>C01·I01</td><td class="wrap-cell">조건 B: ① 카드 → ② 현금 아이콘 배너, 처리 중·반환 화면에 같은 순서 표시를 반복</td></tr>
+        <tr><td class="wrap-cell"><b>R3</b> 미회수 경고음·화면 알림</td><td>C02</td><td class="wrap-cell">카드를 3초 안에 가져가지 않거나 자리를 뜨려 하면 경고음과 붉은 경고 화면</td></tr>
+        <tr><td class="wrap-cell"><b>R4</b> 순서 강제로 생길 새 위험(현금 방치) 대비</td><td>Ch02 Frame 3 확인할 가정</td><td class="wrap-cell">조건 B: 현금도 3초 미회수 시 경고</td></tr>
+        <tr><td class="wrap-cell"><b>R5</b> 출금을 첫 화면 상단에 크게, 낯선 용어에 짧은 설명 (Frame 2, 보조)</td><td>E02·C03·I03</td><td class="wrap-cell">조건 B 메뉴: 출금을 가장 크게, 자주 쓰는 거래 3개를 크게, 나머지 6개는 기타 거래(OTHERS) 화면으로 묶어 첫 화면 선택지를 줄임 (Hick–Hyman 법칙). 금액 확정 버튼을 화면 아래 넓게 배치</td></tr>
+        <tr><td class="wrap-cell"><b>R6</b> 가설 검증 지표 측정</td><td>Ch03 §5·Ch04</td><td class="wrap-cell">카드 회수 성공률, 두고 갈 뻔한 비율, 소요 시간, 5점 척도 설문, 시간순 기록, CSV</td></tr>
+        <tr><td class="wrap-cell"><b>R7</b> 급한 상황 재현</td><td>Ch04 방법 2 보완</td><td class="wrap-cell">대기자 표시와 경과 시간, 시간이 지나면 재촉 문구</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>비교 조건</h2>
+    <div class="cols">
+      <div class="panel"><h3>A · 기존 방식</h3><ul>
+        <li>시행마다 반환 순서가 무작위 (현금 먼저 또는 카드 먼저)</li>
+        <li>순서 안내는 화면 아래 작은 글씨 한 줄</li>
+        <li>메뉴 12개가 같은 크기로 나열, 확인 버튼은 구석에 작게</li>
+        <li>카드 미회수 경고음은 연구자 패널에서 켜고 끔</li></ul></div>
+      <div class="panel"><h3>B · 개선안</h3><ul>
+        <li>항상 카드 먼저, 카드를 가져가야 현금 출구가 열림</li>
+        <li>색상·아이콘으로 된 ① 카드 → ② 현금 안내</li>
+        <li>출금을 맨 위에 가장 크게, 자주 쓰는 3개(이체·조회·입금)를 크게, 나머지는 기타 거래(OTHERS)로 묶음</li>
+        <li>카드·현금 모두 미회수 경고</li></ul></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>가설</h2>
+    <p>H1. 모든 기기에서 카드를 현금보다 먼저 반환하도록 순서를 통일(물리적 강제)하면, 급하게 출금하는 이용자가 카드를 두고 가는(또는 두고 갈 뻔한) 빈도가 기존 방식보다 줄어들 것이다.</p>
+    <p>H2. 반환 순서를 색상·아이콘으로 강조해 안내하면, 급한 상황에서도 이용자가 반환 순서를 더 잘 예측할 것이다.</p>
+  </section>
+
+  <section>
+    <h2>한계</h2>
+    <p>실제 ATM 하드웨어가 아니라 웹 화면으로 재현한 프로토타입입니다. "자리 떠나기" 버튼은 걸어 나가는 행동을 대신하므로 실제 현장 행동과 다를 수 있습니다. 참여자 3~5명 규모의 방향 확인용이며, 실제 카드번호·비밀번호는 쓰지 않습니다(모형 카드, 아무 숫자 4자리).</p>
+  </section>
+
+  <section>
+    <h2>참고문헌</h2>
+    <ul class="refs">
+      <li>Byrne, M. D., &amp; Bovair, S. (1997). A working memory model of a common procedural error. <i>Cognitive Science, 21</i>(1), 31–61.</li>
+      <li>Nielsen, J., &amp; Molich, R. (1990). Heuristic evaluation of user interfaces. <i>Proceedings of CHI '90</i>, 249–256.</li>
+      <li>Ericsson, K. A., &amp; Simon, H. A. (1993). <i>Protocol analysis: Verbal reports as data</i> (Rev. ed.). MIT Press.</li>
+    </ul>
+  </section>
+</section>
+
+</div>
+</main>
+
+<script>
+(function(){
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch(e){} }
+};
+const IC = {
+  card:'<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1" y="1" width="46" height="30" rx="4" fill="currentColor"/><rect x="7" y="9" width="10" height="8" rx="1.5" fill="#00000038"/><rect x="7" y="22" width="22" height="3" rx="1.5" fill="#00000026"/></svg>',
+  cash:'<svg viewBox="0 0 48 32" aria-hidden="true"><rect x="1" y="4" width="46" height="24" rx="2" fill="currentColor"/><circle cx="24" cy="16" r="6" fill="#00000026"/><rect x="5" y="8" width="6" height="16" rx="1" fill="#0000001a"/><rect x="37" y="8" width="6" height="16" rx="1" fill="#0000001a"/></svg>',
+  lock:'<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2"/></svg>',
+  arrow:'<svg class="ob-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  walk:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h12M12 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+const MENU_A = ['예금조회','통장정리','무통장입금','계좌이체','타행이체','현금서비스','공과금납부','예금출금','해외카드','교통카드충전','전자화폐','기타거래'];
+const MENU_B_MAIN = [['계좌이체','다른 계좌로 보내기'],['예금조회','잔액 확인'],['현금 입금','내 계좌에 넣기']];
+const MENU_B_OTHERS = [['타행이체','다른 은행 계좌로 보내기'],['무통장입금','통장 없이 현금으로 입금'],['통장정리','통장에 거래내역 인쇄'],['공과금납부','세금·요금 내기'],['교통카드충전','교통카드에 금액 충전'],['해외카드','외국에서 발급한 카드']];
+const AMOUNTS = [10000,30000,50000,100000,200000,300000];
+const won = n => n.toLocaleString('ko-KR') + '원';
+const sec = ms => ms == null ? '–' : (ms/1000).toFixed(1);
+const now = () => performance.now();
+
+let cfg = Object.assign({pid:'P1', cond:'A', pressure:true, beepA:true}, store.get('atm-cfg', {}));
+let trials = store.get('atm-trials', []);
+let T = null, stage = 'ready', timers = [], pTimer = null, overlayOpen = false;
+
+function later(fn, ms){ const id = setTimeout(fn, ms); timers.push(id); return id; }
+function clearTimers(){ timers.forEach(clearTimeout); timers = []; }
+
+/* ---------- sound ---------- */
+let actx = null;
+function ensureAudio(){ try{ if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if(actx.state === 'suspended') actx.resume(); }catch(e){} }
+function beep(times){
+  if(!actx) return;
+  try{
+    for(let i = 0; i < times; i++){
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = 'square'; o.frequency.value = 1250; o.connect(g); g.connect(actx.destination);
+      const st = actx.currentTime + i * 0.32;
+      g.gain.setValueAtTime(0.0001, st);
+      g.gain.exponentialRampToValueAtTime(0.1, st + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, st + 0.22);
+      o.start(st); o.stop(st + 0.25);
+    }
+  }catch(e){}
+}
+
+/* ---------- trial ---------- */
+function newTrial(){
+  clearTimers(); stopPressure(); closeOverlay();
+  const cond = cfg.cond === 'R' ? (Math.random() < .5 ? 'A' : 'B') : cfg.cond;
+  T = {
+    id: Date.now().toString(36), date: new Date().toISOString(),
+    pid: (cfg.pid || '').trim() || 'P?', cond, assigned: cfg.cond === 'R' ? '무작위' : '지정',
+    pressure: cfg.pressure, beepA: cfg.beepA,
+    order: cond === 'B' ? 'card-first' : (Math.random() < .5 ? 'cash-first' : 'card-first'),
+    t0: null, events: [], pin: '', amount: null, menuOthers: false,
+    noticeMs: null, menuMs: null, amountMs: null, totalMs: null,
+    misclicks: 0, keypadSlips: 0, warnings: 0, leaveAttempts: 0, recovered: 0,
+    cardOut: false, cashOut: false, cardTaken: false, cashTaken: false,
+    nearMiss: false, cashNearMiss: false, cardLeft: false, cashLeft: false, cashNeverOut: false,
+    likertPredict: null, likertAnxiety: null, comment: ''
+  };
+  stage = 'idle';
+  $('#atmWrap').hidden = false; $('#survey').hidden = true;
+  render();
+}
+function log(msg, kind){
+  if(!T || T.t0 == null) return;
+  T.events.push({t: now() - T.t0, msg, kind: kind || 'sys'});
+  renderLog();
+}
+function go(st){
+  stage = st; const t = now();
+  if(st === 'notice') T.noticeAt = t;
+  if(st === 'menu') T.menuAt = t;
+  if(st === 'amount') T.amountAt = t;
+  render();
+  if(st === 'processing') later(startReturn, 1800);
+}
+function insertCard(){
+  if(!T || stage !== 'idle') return;
+  ensureAudio();
+  T.t0 = now();
+  log('카드 삽입', 'user');
+  startPressure();
+  go('notice');
+}
+function startReturn(){
+  if(stage !== 'processing') return;
+  stage = 'return';
+  log(T.order === 'card-first' ? '반환 시작 — 카드 먼저' : '반환 시작 — 현금 먼저', 'sys');
+  if(T.order === 'card-first') ejectCard(); else dispenseCash();
+  render();
+}
+function ejectCard(){
+  if(T.cardOut || stage !== 'return') return;
+  T.cardOut = true; T.cardOutAt = now();
+  log('카드가 투입구로 나옴', 'sys');
+  scheduleWarn('card'); render();
+}
+function dispenseCash(){
+  if(T.cashOut || stage !== 'return') return;
+  T.cashOut = true; T.cashOutAt = now();
+  log(won(T.amount) + ' 현금 지급', 'sys');
+  scheduleWarn('cash');
+  // 기존 방식(현금 먼저): 현금이 나오고 잠시 뒤 카드가 자동으로 나옴
+  if(T.order === 'cash-first') later(ejectCard, 1200);
+  render();
+}
+function warnsFor(what){
+  if(T.cond === 'B') return true;
+  return what === 'card' && T.beepA;
+}
+function scheduleWarn(what){
+  if(!warnsFor(what)) return;
+  const delay = T.cond === 'B' ? 3000 : 4000;
+  later(function tick(){
+    if(stage !== 'return' || overlayOpen) return;
+    const pending = what === 'card' ? (T.cardOut && !T.cardTaken) : (T.cashOut && !T.cashTaken);
+    if(!pending) return;
+    alarm(what);
+    later(tick, 3000);
+  }, delay);
+}
+function alarm(what){
+  T.warnings++; beep(3);
+  log(what === 'card' ? '경고음 — 카드를 가져가지 않음' : '경고음 — 현금을 가져가지 않음', 'warn');
+  const el = what === 'card' ? $('#cardSlot') : $('#cashSlot');
+  el.classList.remove('alarm'); void el.offsetWidth; el.classList.add('alarm');
+}
+function takeCard(){
+  if(!T.cardOut || T.cardTaken) return;
+  T.cardTaken = true;
+  log('카드 회수 (나온 뒤 ' + sec(now() - T.cardOutAt) + '초)', 'user');
+  if(T.order === 'card-first' && !T.cashOut) later(dispenseCash, T.cond === 'B' ? 600 : 900);
+  checkDone(); render();
+}
+function takeCash(){
+  if(!T.cashOut || T.cashTaken) return;
+  T.cashTaken = true;
+  log('현금 회수 (나온 뒤 ' + sec(now() - T.cashOutAt) + '초)', 'user');
+  checkDone(); render();
+}
+function checkDone(){
+  if(T.cardTaken && T.cashTaken){
+    T.totalMs = now() - T.t0;
+    log('카드·현금 모두 회수 — 총 ' + sec(T.totalMs) + '초', 'ok');
+    stage = 'complete'; stopPressure();
+  }
+}
+function leave(){
+  if(!T) return;
+  if(stage === 'complete'){ log('자리를 떠남', 'user'); finish(); return; }
+  if(stage !== 'return' || overlayOpen) return;
+  const miss = [];
+  if(!T.cardTaken) miss.push('카드');
+  if(!T.cashTaken) miss.push('현금');
+  T.leaveAttempts++;
+  log('자리 떠나기 시도 — ' + miss.join('·') + ' 미회수', 'err');
+  if(!T.cardTaken) T.nearMiss = true;
+  if(!T.cashTaken) T.cashNearMiss = true;
+  const warn = T.cond === 'B' || (T.beepA && !T.cardTaken);
+  if(!warn){ leaveFinal(); return; }
+  if(T.cond === 'A' && !T.cardOut) ejectCard();
+  openOverlay(miss);
+}
+function openOverlay(miss){
+  overlayOpen = true; T.warnings++; beep(4);
+  log('경고음 — 자리를 뜨는 중', 'warn');
+  const items = T.cond === 'B' ? miss : ['카드'];
+  const what = items.length === 2 ? '카드와 현금이' : items[0] === '카드' ? '카드가' : '현금이';
+  const o = $('#overlay');
+  o.innerHTML = '<div class="beep">삐— 삐— 삐—</div><p id="ovMsg"><b>' + what + '</b> 아직 기기에 있습니다</p><div class="bar"><i></i></div><button id="goBack">돌아가서 챙기기</button><p style="font-size:12px;opacity:.85">4초 안에 누르지 않으면 그대로 떠난 것으로 기록합니다</p>';
+  o.hidden = false;
+  $('#goBack').focus();
+  later(() => { if(overlayOpen){ closeOverlay(); log('경고를 지나쳐 그대로 떠남', 'err'); leaveFinal(); } }, 4000);
+}
+function closeOverlay(){ overlayOpen = false; const o = $('#overlay'); if(o){ o.hidden = true; o.innerHTML = ''; } }
+function goBack(){
+  closeOverlay(); T.recovered++;
+  log('경고를 듣고 되돌아옴', 'ok');
+  if(T.cardOut && !T.cardTaken) scheduleWarn('card');
+  if(T.cashOut && !T.cashTaken) scheduleWarn('cash');
+  render();
+}
+function leaveFinal(){
+  T.cardLeft = !T.cardTaken;
+  T.cashLeft = T.cashOut && !T.cashTaken;
+  T.cashNeverOut = !T.cashOut;
+  T.totalMs = now() - T.t0;
+  finish();
+}
+function finish(){
+  clearTimers(); stopPressure(); closeOverlay();
+  if(T.totalMs == null) T.totalMs = now() - T.t0;
+  stage = 'survey';
+  render(); showSurvey();
+}
+
+/* ---------- pressure ---------- */
+function startPressure(){ stopPressure(); if(T && T.pressure) pTimer = setInterval(renderPressure, 250); renderPressure(); }
+function stopPressure(){ if(pTimer){ clearInterval(pTimer); pTimer = null; } }
+function renderPressure(){
+  const el = $('#pressure');
+  if(!T || !T.pressure || T.t0 == null || stage === 'survey'){ el.hidden = true; return; }
+  el.hidden = false;
+  const e = (stage === 'complete' && T.totalMs != null ? T.totalMs : now() - T.t0) / 1000;
+  const m = Math.floor(e / 60), s = Math.floor(e % 60);
+  el.querySelector('.p-time').textContent = String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+  el.querySelector('.p-msg').textContent = e > 25 ? '뒷사람: "저기, 아직 멀었어요?"' : e > 12 ? '뒤에서 기다리는 사람이 시계를 봅니다' : '뒤에 2명이 기다리고 있습니다';
+  el.classList.toggle('hot', e > 12 && stage !== 'complete');
+}
+
+/* ---------- render ---------- */
+function render(){ renderScreen(); renderKeypad(); renderSlots(); renderHand(); renderPressure(); renderLog(); renderInfo(); }
+
+function orderBanner(){
+  const cardSt = T.cardTaken ? '완료' : T.cardOut ? '가져가세요' : '먼저';
+  const cashSt = T.cashTaken ? '완료' : T.cashOut ? '가져가세요' : (stage === 'return' ? '잠김' : '다음');
+  return '<div class="order-banner"><div class="ob-step card' + (T.cardTaken ? ' done' : '') + '">' + IC.card + '<b>① 카드</b><span class="st">' + cardSt + '</span></div>' + IC.arrow + '<div class="ob-step cash' + (T.cashTaken ? ' done' : '') + '">' + IC.cash + '<b>② 현금</b><span class="st">' + cashSt + '</span></div></div>';
+}
+function renderScreen(){
+  const s = $('#screen');
+  s.className = 'screen cond-' + (T ? T.cond : 'none');
+  if(!T){ s.innerHTML = '<div class="scr center"><h2>테스트를 준비하세요</h2></div>'; return; }
+  const A = T.cond === 'A';
+  let h = '';
+  switch(stage){
+    case 'idle':
+      h = '<div class="scr center"><p class="eyebrow">어서 오세요</p><h2>카드를 넣어 주세요</h2><p class="sub">아래의 <b>모형 카드 넣기</b>를 누르면 거래가 시작됩니다</p></div>';
+      break;
+    case 'notice':
+      if(A){
+        const line = T.order === 'cash-first' ? '거래 완료 후 현금이 먼저 지급되고 카드가 반환됩니다' : '거래 완료 후 카드가 먼저 반환되고 현금이 지급됩니다';
+        h = '<div class="scr"><h2>거래를 시작합니다</h2><p class="sub">확인을 누르면 비밀번호 입력으로 넘어갑니다.</p><div class="spacer"></div><p class="fine">※ 본 기기는 ' + line + '. 카드를 꼭 챙기시기 바랍니다.</p><button class="sbtn" data-act="noticeOk">확인</button></div>';
+      } else {
+        h = '<div class="scr">' + orderBanner() + '<h2>이 기기는 항상 <mark class="m-card">카드를 먼저</mark> 돌려드립니다</h2><p class="sub">카드를 가져가셔야 현금 출구가 열립니다.</p><div class="spacer"></div><button class="sbtn go" data-act="noticeOk">확인했어요</button></div>';
+      }
+      break;
+    case 'pin': {
+      let dots = ''; for(let i = 0; i < 4; i++) dots += '<i class="' + (i < T.pin.length ? 'on' : '') + '"></i>';
+      h = '<div class="scr center"><h2>비밀번호를 입력하세요</h2><p class="sub">기기 아래쪽 숫자 키패드를 사용하세요</p><div class="pinbox" aria-label="입력한 자리 수 ' + T.pin.length + '">' + dots + '</div><p class="fine">모형 카드입니다. 실제 비밀번호 대신 아무 숫자 4자리를 누르고 키패드의 [확인]을 누르세요.</p></div>';
+      break;
+    }
+    case 'menu':
+      if(A){
+        h = '<div class="scr"><h2>원하시는 거래를 선택하세요</h2><div class="menuA">' + MENU_A.map(m => '<button class="sbtn" data-act="menu" data-item="' + m + '">' + m + '</button>').join('') + '</div></div>';
+      } else {
+        if(T.menuOthers){
+          h = '<div class="scr"><div class="amt-head"><h2>기타 거래</h2><button class="sbtn small" data-act="othersBack">← 처음 메뉴</button></div><div class="menuB">' + MENU_B_OTHERS.map(m => '<button class="sbtn" data-act="menu" data-item="' + m[0] + '">' + m[0] + '<small>' + m[1] + '</small></button>').join('') + '</div></div>';
+        } else {
+          h = '<div class="scr"><button class="menuB-top" data-act="menu" data-item="예금출금"><span><b>현금 출금</b><small>가장 많이 쓰는 거래</small></span>' + IC.cash + '</button><div class="menuB3">' + MENU_B_MAIN.map(m => '<button class="sbtn" data-act="menu" data-item="' + m[0] + '"><b>' + m[0] + '</b><small>' + m[1] + '</small></button>').join('') + '</div><button class="sbtn others" data-act="others"><span><b>기타 거래</b> <span class="en">OTHERS</span></span><small>' + MENU_B_OTHERS.map(m => m[0]).join(' · ') + '</small></button></div>';
+        }
+      }
+      break;
+    case 'amount':
+      if(A){
+        h = '<div class="scr"><div class="amt-head"><div><h2>출금하실 금액을 선택하세요</h2><div class="amt-val">' + (T.amount ? won(T.amount) : '0원') + '</div></div><button class="sbtn small" data-act="amtOk">입력완료</button></div><div class="amts">' + AMOUNTS.map(v => '<button class="sbtn' + (T.amount === v ? ' sel' : '') + '" data-act="amt" data-v="' + v + '">' + (v/10000) + '만원</button>').join('') + '</div><button class="sbtn" data-act="direct">직접입력</button></div>';
+      } else {
+        h = '<div class="scr"><span class="chip">반환 순서 <span class="c">① 카드</span> → <span class="m">② 현금</span></span><h2>얼마를 찾으시겠어요?</h2><div class="amts">' + AMOUNTS.map(v => '<button class="sbtn' + (T.amount === v ? ' sel' : '') + '" data-act="amt" data-v="' + v + '">' + (v/10000) + '만원</button>').join('') + '</div><div class="spacer"></div><button class="sbtn go" data-act="amtOk"' + (T.amount ? '' : ' disabled style="opacity:.5"') + '>' + (T.amount ? won(T.amount) + ' 출금하기' : '금액을 고르세요') + '</button></div>';
+      }
+      break;
+    case 'processing':
+      h = A
+        ? '<div class="scr center"><h2>처리중입니다</h2><div class="progress"><i></i></div><p class="sub">잠시만 기다려 주십시오</p></div>'
+        : '<div class="scr center"><h2>처리 중입니다</h2><div class="progress"><i></i></div>' + orderBanner() + '<p class="sub">곧 카드가 먼저 나옵니다</p></div>';
+      break;
+    case 'return':
+      if(A){
+        let msg = '잠시만 기다려 주십시오';
+        if(T.cashOut && !T.cashTaken) msg = '현금을 받으십시오';
+        else if(T.cardOut && !T.cardTaken) msg = '카드를 받으십시오';
+        h = '<div class="scr center"><h2>' + msg + '</h2><p class="fine">이용해 주셔서 감사합니다</p></div>';
+      } else {
+        const msg = !T.cardTaken ? '먼저 <mark class="m-card">카드를</mark> 가져가세요' : '이제 현금을 가져가세요';
+        h = '<div class="scr center">' + orderBanner() + '<h2>' + msg + '</h2></div>';
+      }
+      break;
+    case 'complete':
+      h = A
+        ? '<div class="scr center"><h2>거래가 완료되었습니다</h2><p class="sub">이용해 주셔서 감사합니다</p></div>'
+        : '<div class="scr center">' + orderBanner() + '<h2>카드와 현금을 모두 챙기셨어요</h2><p class="sub">안녕히 가세요</p></div>';
+      break;
+    case 'survey':
+      h = '<div class="scr center"><h2>설문 진행 중</h2></div>';
+      break;
+  }
+  s.innerHTML = h;
+}
+function screenToast(msg){
+  const s = $('#screen'); const old = s.querySelector('.scr-toast'); if(old) old.remove();
+  const d = document.createElement('div'); d.className = 'scr-toast'; d.textContent = msg; s.appendChild(d);
+  setTimeout(() => d.remove(), 1800);
+}
+function renderKeypad(){
+  const k = $('#keypad');
+  if(k.childElementCount) return;
+  const keys = ['1','2','3','취소','4','5','6','정정','7','8','9','확인','','0',''];
+  k.innerHTML = keys.map(x => {
+    if(x === '') return '<span class="key blank"></span>';
+    const cls = x === '취소' ? 'key fn cancel' : x === '정정' ? 'key fn fix' : x === '확인' ? 'key fn ok' : 'key';
+    return '<button class="' + cls + '" data-key="' + x + '">' + x + '</button>';
+  }).join('');
+}
+function pressKey(x){
+  if(!T || T.t0 == null) return;
+  if(stage !== 'pin'){
+    T.keypadSlips++; log('키패드 [' + x + '] 누름 — 이 단계는 화면을 눌러야 함', 'err');
+    screenToast('이 단계에서는 화면을 눌러 주세요');
+    return;
+  }
+  if(/^\d$/.test(x)){ if(T.pin.length < 4) T.pin += x; }
+  else if(x === '정정' || x === '취소'){ T.pin = ''; }
+  else if(x === '확인'){
+    if(T.pin.length === 4){ log('비밀번호 입력 완료', 'user'); go('menu'); return; }
+    screenToast('4자리를 모두 눌러 주세요');
+  }
+  renderScreen();
+}
+function renderSlots(){
+  const c = $('#cardSlot'), m = $('#cashSlot');
+  const inReturn = T && (stage === 'return' || stage === 'complete');
+  let ch = '<div class="slot-label"><span>카드 투입구</span><span>CARD</span></div><div class="mouth"></div>';
+  if(T && T.cardOut && !T.cardTaken) ch += '<button class="item card" data-act="takeCard">' + IC.card + '카드 가져가기</button>';
+  else if(T && stage === 'idle') ch += '<span class="idle">카드를 넣는 곳</span>';
+  else if(T && T.cardTaken) ch += '<span class="idle">카드 회수함</span>';
+  else ch += '<span class="idle">카드 처리 중</span>';
+  c.innerHTML = ch;
+  c.classList.toggle('glow', !!(T && stage === 'idle'));
+  let mh = '<div class="slot-label"><span>현금 출구</span><span>CASH</span></div><div class="mouth"></div>';
+  if(T && T.cashOut && !T.cashTaken) mh += '<button class="item cash" data-act="takeCash">' + IC.cash + won(T.amount) + ' 가져가기</button>';
+  else if(T && T.cond === 'B' && inReturn && !T.cashOut) mh += '<span class="lock">' + IC.lock + '카드를 먼저 가져가면 열립니다</span>';
+  else if(T && T.cashTaken) mh += '<span class="idle">현금 회수함</span>';
+  else mh += '<span class="idle">닫혀 있음</span>';
+  m.innerHTML = mh;
+}
+function renderHand(){
+  const h = $('#hand');
+  if(!T){ h.innerHTML = ''; return; }
+  let items = '';
+  if(stage === 'idle') items = '<button class="insert-btn" data-act="insert">' + IC.card + '모형 카드 넣기</button>';
+  else {
+    items = '<span class="label">내 손에</span>';
+    if(T.cardTaken) items += '<span class="tag card">' + IC.card + '카드</span>';
+    if(T.cashTaken) items += '<span class="tag cash">' + IC.cash + won(T.amount) + '</span>';
+    if(!T.cardTaken && !T.cashTaken) items += '<span class="empty">아직 없음</span>';
+  }
+  const canLeave = stage === 'return' || stage === 'complete';
+  h.innerHTML = '<div class="items">' + items + '</div><button class="leave-btn" data-act="leave"' + (canLeave ? '' : ' disabled') + '>자리 떠나기 ' + IC.walk + '</button>';
+}
+function renderLog(){
+  const l = $('#log');
+  if(!T || !T.events.length){ l.innerHTML = '<li class="empty" style="display:block">카드를 넣으면 시간순 기록이 시작됩니다.</li>'; return; }
+  l.innerHTML = T.events.map(e => {
+    const m = Math.floor(e.t / 60000), s = ((e.t % 60000) / 1000).toFixed(1).padStart(4, '0');
+    return '<li class="' + e.kind + '"><time>' + String(m).padStart(2,'0') + ':' + s + '</time><span>' + esc(e.msg) + '</span></li>';
+  }).join('');
+  l.scrollTop = l.scrollHeight;
+}
+function renderInfo(){
+  const el = $('#trialInfo');
+  if(!T){ el.textContent = ''; return; }
+  el.textContent = '현재: ' + T.pid + ' · 조건 ' + T.cond + (T.assigned === '무작위' ? ' (무작위)' : '') + ' · 저장된 시행 ' + trials.length + '건';
+}
+function renderCondDesc(){
+  const d = {
+    A: '<b>A · 기존 방식</b> 반환 순서가 시행마다 무작위로 바뀌고, 안내는 화면 아래 작은 글씨 한 줄입니다.',
+    B: '<b>B · 개선안</b> 항상 카드 먼저. 카드를 가져가야 현금 출구가 열리며 ① 카드 → ② 현금 아이콘 안내가 붙습니다.',
+    R: '<b>무작위 배정</b> 시작할 때 A·B 중 하나를 고릅니다. 참여자에게 조건을 알리지 않을 때 씁니다.'
+  };
+  $('#condDesc').innerHTML = d[cfg.cond];
+}
+
+/* ---------- survey ---------- */
+function showSurvey(){
+  $('#atmWrap').hidden = true;
+  const s = $('#survey'); s.hidden = false;
+  const card = T.cardLeft ? ['기기에 두고 감','bad'] : T.nearMiss ? ['두고 갈 뻔했다가 회수','bad'] : ['바로 회수','good'];
+  const cash = T.cashLeft ? ['기기에 두고 감','bad'] : T.cashNeverOut ? ['출금 전 떠남','bad'] : T.cashNearMiss ? ['두고 갈 뻔했다가 회수','bad'] : ['회수','good'];
+  const scale = (name, lo, hi) => '<div class="scale"><span class="end">' + lo + '</span>' + [1,2,3,4,5].map(v => '<label><input type="radio" name="' + name + '" id="' + name + v + '" value="' + v + '"><span>' + v + '</span></label>').join('') + '<span class="end">' + hi + '</span></div>';
+  s.innerHTML =
+    '<div><p class="label">시행 결과 · ' + esc(T.pid) + ' · 조건 ' + T.cond + '</p><h2 style="font-size:20px">거래 직후 설문</h2></div>' +
+    '<dl class="outcome">' +
+      '<div><dt>카드</dt><dd class="' + card[1] + '">' + card[0] + '</dd></div>' +
+      '<div><dt>현금</dt><dd class="' + cash[1] + '">' + cash[0] + '</dd></div>' +
+      '<div><dt>총 소요 시간</dt><dd>' + sec(T.totalMs) + '초</dd></div>' +
+      '<div><dt>출금 메뉴 찾기</dt><dd>' + sec(T.menuMs) + '초</dd></div>' +
+      '<div><dt>안내 화면에 머문 시간</dt><dd>' + sec(T.noticeMs) + '초</dd></div>' +
+      '<div><dt>경고음 · 오조작</dt><dd>' + T.warnings + '회 · ' + (T.misclicks + T.keypadSlips) + '회</dd></div>' +
+    '</dl>' +
+    '<div class="likert"><fieldset><legend>1. 카드와 현금 중 무엇이 먼저 나올지 예상할 수 있었다.</legend>' + scale('q1','전혀 아니다','매우 그렇다') + '</fieldset></div>' +
+    '<div class="likert"><fieldset><legend>2. 거래하는 동안 카드를 두고 갈까 봐 불안했다.</legend>' + scale('q2','전혀 아니다','매우 그렇다') + '</fieldset></div>' +
+    '<div class="field"><label class="label" for="cmt">이 화면을 쓰면서 좋았던 점과 걱정되는 점을 각각 적어 주세요 (선택)</label><textarea id="cmt" maxlength="400"></textarea></div>' +
+    '<p class="empty" id="surveyErr" hidden style="color:var(--warn)">1번과 2번 문항에 답해 주세요.</p>' +
+    '<div class="row"><button class="btn primary" data-act="saveNext">저장하고 다음 테스트</button><button class="btn" data-act="saveView">저장하고 결과 보기</button><button class="btn" data-act="discard">저장하지 않음</button></div>';
+}
+function saveTrial(){
+  const q1 = document.querySelector('input[name=q1]:checked'), q2 = document.querySelector('input[name=q2]:checked');
+  if(!q1 || !q2){ $('#surveyErr').hidden = false; return false; }
+  T.likertPredict = +q1.value; T.likertAnxiety = +q2.value; T.comment = $('#cmt').value.trim();
+  const r = n => n == null ? null : Math.round(n);
+  trials.push({
+    id: T.id, date: T.date, pid: T.pid, cond: T.cond, assigned: T.assigned, order: T.order, pressure: T.pressure, beepA: T.beepA,
+    amount: T.amount, totalMs: r(T.totalMs), noticeMs: r(T.noticeMs), menuMs: r(T.menuMs), amountMs: r(T.amountMs),
+    misclicks: T.misclicks, keypadSlips: T.keypadSlips, warnings: T.warnings, leaveAttempts: T.leaveAttempts, recovered: T.recovered,
+    nearMiss: T.nearMiss, cardLeft: T.cardLeft, cashNearMiss: T.cashNearMiss, cashLeft: T.cashLeft, cashNeverOut: T.cashNeverOut,
+    likertPredict: T.likertPredict, likertAnxiety: T.likertAnxiety, comment: T.comment,
+    log: T.events.map(e => sec(e.t) + 's ' + e.msg).join(' | ')
+  });
+  store.set('atm-trials', trials);
+  toast('시행 기록을 저장했습니다 (' + trials.length + '건)');
+  return true;
+}
+
+/* ---------- results ---------- */
+const SAMPLE = [
+  {pid:'예시1',cond:'A',order:'cash-first',totalMs:48200,menuMs:9100,noticeMs:1000,warnings:2,nearMiss:true,cardLeft:false,likertPredict:2,likertAnxiety:4,comment:'(예시) 돈 받고 바로 가려다 소리 듣고 돌아옴'},
+  {pid:'예시2',cond:'A',order:'card-first',totalMs:41300,menuMs:7400,noticeMs:1300,warnings:0,nearMiss:false,cardLeft:false,likertPredict:3,likertAnxiety:3,comment:''},
+  {pid:'예시3',cond:'A',order:'cash-first',totalMs:39000,menuMs:11200,noticeMs:800,warnings:1,nearMiss:true,cardLeft:true,likertPredict:1,likertAnxiety:4,comment:'(예시) 안내 문구를 못 봄'},
+  {pid:'예시4',cond:'A',order:'card-first',totalMs:44100,menuMs:8000,noticeMs:2100,warnings:0,nearMiss:false,cardLeft:false,likertPredict:3,likertAnxiety:2,comment:''},
+  {pid:'예시1',cond:'B',order:'card-first',totalMs:37400,menuMs:2900,noticeMs:2400,warnings:0,nearMiss:false,cardLeft:false,likertPredict:5,likertAnxiety:1,comment:'(예시) 카드부터 나와서 안심됨'},
+  {pid:'예시2',cond:'B',order:'card-first',totalMs:35200,menuMs:3400,noticeMs:1900,warnings:1,nearMiss:false,cardLeft:false,likertPredict:4,likertAnxiety:2,comment:''},
+  {pid:'예시3',cond:'B',order:'card-first',totalMs:40100,menuMs:2600,noticeMs:1500,warnings:2,nearMiss:true,cardLeft:false,likertPredict:4,likertAnxiety:2,comment:'(예시) 현금이 안 나와서 잠깐 당황'},
+  {pid:'예시4',cond:'B',order:'card-first',totalMs:38300,menuMs:3100,noticeMs:2600,warnings:0,nearMiss:false,cardLeft:false,likertPredict:5,likertAnxiety:1,comment:''}
+];
+function summarize(list){
+  const n = list.length; if(!n) return null;
+  const pct = f => 100 * list.filter(f).length / n;
+  const avg = k => { const v = list.map(t => t[k]).filter(x => x != null); return v.length ? v.reduce((a,b) => a + b, 0) / v.length : null; };
+  return { n, cardSuccess: pct(t => !t.cardLeft), nearMiss: pct(t => t.nearMiss), total: avg('totalMs'), menu: avg('menuMs'), notice: avg('noticeMs'), predict: avg('likertPredict'), anxiety: avg('likertAnxiety') };
+}
+const METRICS = [
+  ['cardSuccess','카드 회수 성공률','높을수록 좋음 · 핵심 지표 1 (H1)', v => Math.round(v) + '%', () => 100],
+  ['nearMiss','카드를 두고 떠나려 한 비율','낮을수록 좋음 · 경고로 되돌아온 경우 포함', v => Math.round(v) + '%', () => 100],
+  ['predict','반환 순서 예측 가능성','높을수록 좋음 · 핵심 지표 2 (H2), 5점 척도', v => v.toFixed(1), () => 5],
+  ['anxiety','카드 분실 불안감','낮을수록 좋음 · 5점 척도', v => v.toFixed(1), () => 5],
+  ['total','총 소요 시간','실패 조건: 크게 늘어나면 안 됨', v => (v/1000).toFixed(1) + '초', m => m],
+  ['menu','출금 메뉴 찾는 시간','낮을수록 좋음 · 보조 문제 (Frame 2)', v => (v/1000).toFixed(1) + '초', m => m]
+];
+function renderResults(){
+  const sample = trials.length === 0;
+  const data = sample ? SAMPLE : trials;
+  $('#sampleNote').hidden = !sample;
+  $('#copyCsv').disabled = sample; $('#clearBtn').disabled = sample;
+  const a = summarize(data.filter(t => t.cond === 'A')), b = summarize(data.filter(t => t.cond === 'B'));
+  $('#ncount').innerHTML = '<span>A · ' + (a ? a.n : 0) + '회</span><span>B · ' + (b ? b.n : 0) + '회</span>';
+  $('#metrics').innerHTML = METRICS.map(([k, label, hint, fmt, maxF]) => {
+    const va = a ? a[k] : null, vb = b ? b[k] : null;
+    const mx = maxF(Math.max(va || 0, vb || 0) * 1.15) || 1;
+    const row = (c, v) => '<div class="bar-row ' + c + '"><b>' + c + '</b><div class="bar-track"><i style="width:' + (v == null ? 0 : Math.max(2, 100 * v / mx)) + '%"></i></div><span class="v">' + (v == null ? '–' : fmt(v)) + '</span></div>';
+    return '<div class="metric"><div class="mh"><span>' + label + '</span><small>' + hint + '</small></div>' + row('A', va) + row('B', vb) + '</div>';
+  }).join('');
+  let v = [];
+  if(!a || !b) v.push('<p>A와 B 조건을 모두 1회 이상 실시해야 비교할 수 있습니다.</p>');
+  else {
+    const h1 = b.cardSuccess > a.cardSuccess || (b.cardSuccess === a.cardSuccess && b.nearMiss < a.nearMiss);
+    const h2 = b.predict > a.predict;
+    const slow = b.total > a.total * 1.3;
+    v.push('<p><span class="pill ' + (h1 ? 'good' : 'bad') + '">H1 ' + (h1 ? '방향 일치' : '방향 불일치') + '</span> 카드 회수 성공률 A ' + Math.round(a.cardSuccess) + '% → B ' + Math.round(b.cardSuccess) + '%, 두고 갈 뻔한 비율 A ' + Math.round(a.nearMiss) + '% → B ' + Math.round(b.nearMiss) + '%</p>');
+    v.push('<p><span class="pill ' + (h2 ? 'good' : 'bad') + '">H2 ' + (h2 ? '방향 일치' : '방향 불일치') + '</span> 예측 가능성 A ' + a.predict.toFixed(1) + ' → B ' + b.predict.toFixed(1) + ' (5점 척도)</p>');
+    v.push('<p><span class="pill ' + (slow ? 'bad' : 'good') + '">실패 조건 ' + (slow ? '해당' : '해당 없음') + '</span> 총 소요 시간 A ' + (a.total/1000).toFixed(1) + '초 → B ' + (b.total/1000).toFixed(1) + '초 (30% 이상 늘면 실패로 봄)</p>');
+    v.push('<p class="empty">표본이 작아 통계적 결론이 아닙니다. 정성 의견과 함께 해석하세요.</p>');
+  }
+  $('#verdict').innerHTML = v.join('');
+  $('#tbody').innerHTML = data.map((t, i) => {
+    const card = t.cardLeft ? '<span class="pill bad">두고 감</span>' : t.nearMiss ? '<span class="pill near">뻔했음</span>' : '<span class="pill good">회수</span>';
+    return '<tr><td class="num">' + (i + 1) + '</td><td>' + esc(t.pid) + '</td><td><span class="pill ' + t.cond + '">' + t.cond + '</span></td><td>' + (t.order === 'card-first' ? '카드 먼저' : '현금 먼저') + '</td><td>' + card + '</td><td class="num">' + sec(t.totalMs) + '초</td><td class="num">' + sec(t.menuMs) + '초</td><td class="num">' + sec(t.noticeMs) + '초</td><td class="num">' + (t.warnings ?? 0) + '</td><td class="num">' + (t.likertPredict ?? '–') + '</td><td class="num">' + (t.likertAnxiety ?? '–') + '</td><td class="wrap-cell">' + esc(t.comment || '') + '</td></tr>';
+  }).join('');
+}
+function toCsv(){
+  const cols = ['id','date','pid','cond','assigned','order','pressure','beepA','amount','totalMs','noticeMs','menuMs','amountMs','misclicks','keypadSlips','warnings','leaveAttempts','recovered','nearMiss','cardLeft','cashNearMiss','cashLeft','cashNeverOut','likertPredict','likertAnxiety','comment','log'];
+  const q = v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return [cols.join(',')].concat(trials.map(t => cols.map(c => q(t[c])).join(','))).join('\n');
+}
+
+/* ---------- misc ---------- */
+function toast(msg){
+  const d = document.createElement('div'); d.className = 'toast'; d.setAttribute('role','status'); d.textContent = msg;
+  document.body.appendChild(d); setTimeout(() => d.remove(), 2200);
+}
+const VIEWS = ['lab','results','plan'];
+function route(){
+  let h = location.hash.slice(1); if(!VIEWS.includes(h)) h = 'lab';
+  VIEWS.forEach(v => { $('#v-' + v).hidden = v !== h; $('[data-nav="' + v + '"]').setAttribute('aria-current', v === h ? 'page' : 'false'); });
+  if(h === 'results') renderResults();
+}
+
+/* ---------- events ---------- */
+document.addEventListener('click', e => {
+  const k = e.target.closest('[data-key]');
+  if(k){ pressKey(k.dataset.key); return; }
+  const a = e.target.closest('[data-act]'); if(!a || a.disabled) return;
+  const act = a.dataset.act;
+  if(act === 'insert') insertCard();
+  else if(act === 'noticeOk' && stage === 'notice'){ T.noticeMs = now() - T.noticeAt; log('안내 확인 (' + sec(T.noticeMs) + '초 머무름)', 'user'); go('pin'); }
+  else if(act === 'menu' && stage === 'menu'){
+    const item = a.dataset.item;
+    if(item === '예금출금'){ T.menuMs = now() - T.menuAt; log('출금 메뉴 선택 (' + sec(T.menuMs) + '초)', 'user'); go('amount'); }
+    else { T.misclicks++; log('다른 메뉴 선택: ' + item, 'err'); screenToast('이 프로토타입에서는 출금만 할 수 있어요'); }
+  }
+  else if(act === 'others' && stage === 'menu'){ T.menuOthers = true; log('기타 거래(OTHERS) 열기', 'user'); renderScreen(); }
+  else if(act === 'othersBack' && stage === 'menu'){ T.menuOthers = false; log('처음 메뉴로 돌아감', 'user'); renderScreen(); }
+  else if(act === 'amt' && stage === 'amount'){ T.amount = +a.dataset.v; log(won(T.amount) + ' 선택', 'user'); renderScreen(); }
+  else if(act === 'direct'){ T.misclicks++; log('직접입력 누름', 'err'); screenToast('직접입력은 이 프로토타입에서 지원하지 않아요'); }
+  else if(act === 'amtOk' && stage === 'amount'){
+    if(!T.amount){ screenToast('금액을 먼저 고르세요'); return; }
+    T.amountMs = now() - T.amountAt; log('금액 확정 (' + sec(T.amountMs) + '초)', 'user'); go('processing');
+  }
+  else if(act === 'takeCard') takeCard();
+  else if(act === 'takeCash') takeCash();
+  else if(act === 'leave') leave();
+  else if(act === 'saveNext'){ if(saveTrial()) newTrial(); }
+  else if(act === 'saveView'){ if(saveTrial()){ newTrial(); location.hash = 'results'; } }
+  else if(act === 'discard'){ newTrial(); toast('저장하지 않고 새 테스트를 준비했습니다'); }
+});
+document.addEventListener('click', e => { if(e.target.id === 'goBack') goBack(); });
+document.addEventListener('keydown', e => {
+  if(stage === 'pin' && $('#v-lab').hidden === false){
+    if(/^\d$/.test(e.key)) pressKey(e.key);
+    else if(e.key === 'Enter') pressKey('확인');
+    else if(e.key === 'Backspace') pressKey('정정');
+  }
+});
+$('#pid').value = cfg.pid; $('#cond').value = cfg.cond; $('#pressureOpt').checked = cfg.pressure; $('#beepA').checked = cfg.beepA;
+function saveCfg(){ cfg = { pid: $('#pid').value, cond: $('#cond').value, pressure: $('#pressureOpt').checked, beepA: $('#beepA').checked }; store.set('atm-cfg', cfg); renderCondDesc(); }
+['pid','cond','pressureOpt','beepA'].forEach(id => $('#' + id).addEventListener('change', saveCfg));
+$('#pid').addEventListener('input', saveCfg);
+$('#startBtn').addEventListener('click', () => { saveCfg(); newTrial(); toast('조건 ' + T.cond + ' 테스트를 준비했습니다'); });
+$('#copyCsv').addEventListener('click', () => {
+  const csv = toCsv(); const fb = $('#csvFallback');
+  const show = () => { fb.hidden = false; fb.value = csv; fb.focus(); fb.select(); toast('자동 복사가 막혀 있어 텍스트를 선택해 두었습니다. Ctrl+C로 복사하세요'); };
+  try{ navigator.clipboard.writeText(csv).then(() => toast('CSV를 클립보드에 복사했습니다 (' + trials.length + '건)'), show); }catch(err){ show(); }
+});
+$('#clearBtn').addEventListener('click', () => { $('#confirmClear').hidden = false; });
+$('#clearNo').addEventListener('click', () => { $('#confirmClear').hidden = true; });
+$('#clearYes').addEventListener('click', () => { trials = []; store.set('atm-trials', trials); $('#confirmClear').hidden = true; $('#csvFallback').hidden = true; renderResults(); renderInfo(); toast('기록을 모두 삭제했습니다'); });
+addEventListener('hashchange', route);
+
+renderCondDesc();
+newTrial();
+route();
+})();
+</script>
